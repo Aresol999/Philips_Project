@@ -3,6 +3,9 @@ import net_bootstrap  # noqa: F401 (ensure SSLKEYLOGFILE disabled early)
 import subprocess
 import sys
 import time
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def run(file):
     return subprocess.Popen([sys.executable, file])
@@ -31,7 +34,13 @@ print("Started orchestrator...")
 time.sleep(2)
 
 # Start Dashboard
-subprocess.Popen([sys.executable, "-m", "streamlit", "run", "dashboard.py"])
+
+subprocess.Popen([
+    "streamlit", "run",
+    os.path.join(BASE_DIR, "dashboard.py")
+])
+
+#subprocess.Popen([sys.executable, "-m", "streamlit", "run", "dashboard.py"])
 
 # Keep running
 bus.wait()

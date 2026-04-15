@@ -1,45 +1,53 @@
-import net_bootstrap  # noqa: F401 (ensure SSLKEYLOGFILE disabled early)
-
 import subprocess
 import sys
 import time
 import os
+import signal
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+processes = []
 
 def run(file):
-    return subprocess.Popen([sys.executable, file])
+    p = subprocess.Popen([sys.executable, file])
+    processes.append(p)
+    return p
 
-# Start A2A Bus FIRST
-bus = run("a2a_bus.py")
-print("Started A2A Bus...")
-time.sleep(3)
+try:
+    run("a2a_bus.py")
+    time.sleep(2)
 
-# Start MCP Agents
-monitor = run("monitoring_agent.py")
-analysis = run("analysis_agent.py")
-care = run("careplan_agent.py")
-print("Started MCP agents...")
-time.sleep(3)
+    run("monitoring_agent.py")
+    run("analysis_agent.py")
+    run("careplan_agent.py")
+    time.sleep(2)
 
-# Start A2A Agents
-doctor = run("doctor_agent.py")
-caregiver = run("caregiver_agent.py")
-print("Started A2A agents...")
-time.sleep(3)
+    run("doctor_agent.py")
+    run("caregiver_agent.py")
+    time.sleep(2)
 
-# Start Orchestrator
-main = run("main.py")
-print("Started orchestrator...")
-time.sleep(2)
+    run("main.py")
+    time.sleep(2)
 
-# Start Dashboard
-subprocess.Popen([
-    "streamlit", "run",
-    os.path.join(BASE_DIR, "dashboard.py")
-])
+    subprocess.Popen([
+        "streamlit", "run",
+        os.path.join(os.getcwd(), "dashboard.py")
+    ])
 
-#subprocess.Popen([sys.executable, "-m", "streamlit", "run", "dashboard.py"])
+    while True:
+        time.sleep(1)
 
-# Keep running
-bus.wait()
+except KeyboardInterrupt:
+    print("\nShutting down all services...")
+
+    for p in processes:
+        try:
+            p.terminate()
+        except:
+            pass
+
+    for p in processes:
+        try:
+            p.wait(timeout=5)
+        except:
+            p.kill()
+
+    print("All processes stopped.")

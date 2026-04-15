@@ -34,7 +34,6 @@ print("Started orchestrator...")
 time.sleep(2)
 
 # Start Dashboard
-
 subprocess.Popen([
     "streamlit", "run",
     os.path.join(BASE_DIR, "dashboard.py")

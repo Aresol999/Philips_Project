@@ -1,19 +1,32 @@
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+import net_bootstrap  # noqa: F401 (must run before SSL/network imports)
+
 import asyncio
 import httpx
-import google.generativeai as genai
 import os
 import json
 from dotenv import load_dotenv
-import time
+
+
 
 from mcp_registry import MCPRegistry
 
 # ---------------- SETUP ----------------
 load_dotenv()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-# Use gemini-1.5-flash for maximum stability during demo
-planner_model = genai.GenerativeModel("gemini-2.5-flash")
+
+
+planner_model = None
+try:
+    import google.generativeai as genai  # type: ignore
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+    # Use gemini-2.5-flash for stability during demo
+    planner_model = genai.GenerativeModel("gemini-2.5-flash")
+except Exception as _e:
+    # Safe fallback: planner() already has deterministic fallback behavior.
+    planner_model = None
 
 BUS = "http://127.0.0.1:8000"
 
@@ -60,6 +73,8 @@ async def planner(vitals, tools_metadata):
     Return ONLY JSON: ["tool1", "tool2"]
     """
     try:
+        if planner_model is None:
+            raise RuntimeError("Gemini unavailable")
         response = planner_model.generate_content(prompt)
         text = response.text
         return json.loads(text[text.find("["):text.rfind("]")+1])
@@ -68,7 +83,7 @@ async def planner(vitals, tools_metadata):
 
 # ---------------- MAIN EXECUTION LOOP ----------------
 async def run():
-    async with httpx.AsyncClient(timeout=None) as client:
+    async with httpx.AsyncClient(timeout=None, trust_env=False) as client:
         print("=== PHILIPS AUTONOMOUS ORCHESTRATOR ===")
         await registry.discover_tools()
         tools_metadata = registry.list_tools()
@@ -110,5 +125,7 @@ async def run():
 
 if __name__ == "__main__":
     asyncio.run(run())
+
+
 
 

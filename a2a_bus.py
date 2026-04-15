@@ -1,63 +1,89 @@
+import net_bootstrap  # noqa: F401 (must run before SSL/network imports)
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import asyncio
 import logging
 
-# Set up logging so you can show the interviewers the live message flow
+# Logging (great for demo)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("A2A-Bus")
 
 app = FastAPI(title="Philips A2A Message Bus")
 
-# In-memory storage for queues
+# In-memory queues
 subscribers = {}
 
 class Message(BaseModel):
     sender: str
-    receiver: str # Use "all" for broadcast
-    type: str     # e.g., "ALERT", "INFO", "CRITICAL"
+    receiver: str  # "all" for broadcast
+    type: str
     payload: dict
 
+# ROOT ENDPOINT (FIXES UI OFFLINE ISSUE)
+@app.get("/")
+async def root():
+    return {"status": "A2A Bus Running"}
+
+# HEALTH CHECK (optional but useful)
+@app.get("/health")
+async def health():
+    return {
+        "status": "healthy",
+        "subscribers": list(subscribers.keys())
+    }
+
+# SUBSCRIBE (SAFE RECONNECT)
 @app.post("/subscribe/{name}")
 async def subscribe(name: str):
-    subscribers[name] = asyncio.Queue()
-    logger.info(f"Agent '{name}' connected to the bus.")
-    return {"status": f"Agent {name} subscribed successfully"}
+    if name not in subscribers:
+        subscribers[name] = asyncio.Queue()
+        logger.info(f"[BUS] {name} subscribed")
+    else:
+        logger.info(f"[BUS] {name} already subscribed (reusing queue)")
 
+    return {"status": f"{name} connected"}
+
+# POLL (CONSISTENT RESPONSE)
 @app.get("/poll/{name}")
 async def poll(name: str):
     if name not in subscribers:
-        # Instead of empty {}, return a clear error
         raise HTTPException(status_code=404, detail="Agent not subscribed")
 
     queue = subscribers[name]
+
     try:
-        # Wait for a message for 10 seconds
         msg = await asyncio.wait_for(queue.get(), timeout=10.0)
         return msg
-    except asyncio.TimeoutError:
-        return {"status": "timeout", "msg": None}
 
+    except asyncio.TimeoutError:
+        # IMPORTANT: return empty dict instead of random format
+        return {}
+
+# SEND (ROBUST ROUTING)
 @app.post("/send")
 async def send(msg: Message):
-    logger.info(f"Routing message from {msg.sender} to {msg.receiver}")
-    
-    # Broadcast Logic (True A2A)
+    logger.info(f"[BUS] {msg.sender} → {msg.receiver} ({msg.type})")
+
+    # BROADCAST
     if msg.receiver == "all":
+        count = 0
         for name, queue in subscribers.items():
             await queue.put(msg.dict())
-        return {"status": "broadcast_sent", "count": len(subscribers)}
+            count += 1
 
-    # Point-to-Point Logic
+        return {"status": "broadcast", "sent_to": count}
+
+    # DIRECT MESSAGE
     if msg.receiver in subscribers:
         await subscribers[msg.receiver].put(msg.dict())
         return {"status": "delivered"}
-    
-    logger.warning(f"Receiver {msg.receiver} not found on bus.")
+
+    # RECEIVER NOT FOUND
+    logger.warning(f"[BUS] Receiver {msg.receiver} not found")
     return {"status": "undelivered", "reason": "receiver_offline"}
+
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
-
-
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")

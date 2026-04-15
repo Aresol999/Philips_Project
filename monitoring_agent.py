@@ -10,7 +10,6 @@ app = FastAPI()
 with open("vitals_patients.json", "r") as f:
     data = json.load(f)
 
-# Pointer for time-series progression
 index = 0
 
 @mcp.tool()
@@ -18,13 +17,13 @@ def get_vitals():
     global index
 
     patient = data[index]
-    index = (index + 1) % len(data)  # loop back after end
+    index = (index + 1) % len(data)
 
     return {
-        "time": patient["time"],
-        "patient_id": patient["patient_id"],
-        "heart_rate": patient["heart_rate"],
-        "spo2": patient["spo2"]
+        "time": patient.get("time", index),
+        "patient_id": patient.get("patient_id"),
+        "heart_rate": patient.get("heart_rate"),
+        "spo2": patient.get("spo2")
     }
 
 @app.post("/tools/get_vitals")
@@ -45,6 +44,4 @@ async def list_tools():
     }
 
 if __name__ == "__main__":
-    uvicorn.run(app, port=9001)
-
-
+    uvicorn.run(app, port=9001, log_level="warning")

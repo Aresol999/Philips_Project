@@ -1,16 +1,29 @@
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+import net_bootstrap  # noqa: F401 (must run before SSL/network imports)
+
 from dotenv import load_dotenv
 load_dotenv()
 
+
+
 from fastapi import FastAPI, Request
 import uvicorn
-import google.generativeai as genai
 import os
 import json
 import re
 
+
+
 app = FastAPI()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-model = genai.GenerativeModel("gemini-2.5-flash")
+model = None
+try:
+    import google.generativeai as genai  # type: ignore
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+    model = genai.GenerativeModel("gemini-2.5-flash")
+except Exception:
+    model = None
 
 history = []
 
@@ -43,6 +56,8 @@ def plan_logic(input_data: dict):
     """
 
     try:
+        if model is None:
+            raise RuntimeError("Gemini unavailable")
         response = model.generate_content(prompt)
         llm_output = safe_json_parse(response.text)
     except Exception as e:
@@ -75,4 +90,7 @@ async def list_tools():
     }
 
 if __name__ == "__main__":
-    uvicorn.run(app, port=9003)
+    uvicorn.run(app, port=9003, log_level="warning")
+
+
+

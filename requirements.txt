@@ -1,0 +1,12 @@
+streamlit
+pandas
+plotly
+requests
+streamlit-autorefresh
+fastapi
+uvicorn
+pydantic
+httpx
+python-dotenv
+google-generativeai
+fastmcp
